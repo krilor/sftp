@@ -128,23 +128,44 @@ func NewClient(conn *ssh.Client, opts ...ClientOption) (*Client, error) {
 // NewSubsystemClient creates a new SFTP client on conn, using zero or more option
 // functions.
 //
-// Subsystem can be used to specify a custom subsystem command, similar to the -s option for sftp cli.
-// It can be either be a subsystem configured on the sssd or a custom command/path.
-// Specify subsystem as a path when the remote sshd does not have an sftp subsystem configured.
-// Specify subsystem as "sudo -u [user] /path/to/sftp-server" to get SFTP with another user.
-// Subsystem falls back to "sftp" if empty string is specified.
-// Sudo must be passwordless or conn must have a valid sudo ticket.
+// Subsystem must be defined in targets sshd_config.
 func NewSubsystemClient(conn *ssh.Client, subsystem string, opts ...ClientOption) (*Client, error) {
-
-	if subsystem == "" {
-		subsystem = "sftp"
-	}
 
 	s, err := conn.NewSession()
 	if err != nil {
 		return nil, err
 	}
 	if err := s.RequestSubsystem(subsystem); err != nil {
+		return nil, err
+	}
+	pw, err := s.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	pr, err := s.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewClientPipe(pr, pw, opts...)
+}
+
+// NewSubsystemCommandClient creates a new SFTP client on conn, using a custom subsystem command and zero or more option
+// functions.
+//
+// Command cmd can be used to specify a custom subsystem command, similar to the -s option for sftp cli.
+//
+// Specify subsystem as a path when the remote sshd does not have an sftp Subsystem configured.
+// Specify subsystem as "sudo -u [user] /path/to/sftp-server" to get SFTP with another user.
+//
+// Sudo must have NOPASSWD for the sftp-server binary.
+func NewSubsystemCommandClient(conn *ssh.Client, cmd string, opts ...ClientOption) (*Client, error) {
+
+	s, err := conn.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	if ok, err := s.SendRequest("exec", true, ssh.Marshal(struct{ Command string }{cmd})); err != nil || !ok {
 		return nil, err
 	}
 	pw, err := s.StdinPipe()
