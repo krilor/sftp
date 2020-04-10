@@ -3,6 +3,7 @@ package sftp
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -165,7 +166,11 @@ func NewSubsystemCommandClient(conn *ssh.Client, cmd string, opts ...ClientOptio
 	if err != nil {
 		return nil, err
 	}
-	if ok, err := s.SendRequest("exec", true, ssh.Marshal(struct{ Command string }{cmd})); err != nil || !ok {
+	ok, err := s.SendRequest("exec", true, ssh.Marshal(struct{ Command string }{cmd}))
+	if err == nil && !ok {
+		err = fmt.Errorf("sftp: command %v failed", cmd)
+	}
+	if err != nil {
 		return nil, err
 	}
 	pw, err := s.StdinPipe()
