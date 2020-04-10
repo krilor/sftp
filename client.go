@@ -122,11 +122,29 @@ func MaxConcurrentRequestsPerFile(n int) ClientOption {
 // NewClient creates a new SFTP client on conn, using zero or more option
 // functions.
 func NewClient(conn *ssh.Client, opts ...ClientOption) (*Client, error) {
+	return NewSubsystemClient(conn, "sftp", opts...)
+}
+
+// NewSubsystemClient creates a new SFTP client on conn, using zero or more option
+// functions.
+//
+// Subsystem can be used to specify a custom subsystem command, similar to the -s option for sftp cli.
+// It can be either be a subsystem configured on the sssd or a custom command/path.
+// Specify subsystem as a path when the remote sshd does not have an sftp subsystem configured.
+// Specify subsystem as "sudo -u [user] /path/to/sftp-server" to get SFTP with another user.
+// Subsystem falls back to "sftp" if empty string is specified.
+// Sudo must be passwordless or conn must have a valid sudo ticket.
+func NewSubsystemClient(conn *ssh.Client, subsystem string, opts ...ClientOption) (*Client, error) {
+
+	if subsystem == "" {
+		subsystem = "sftp"
+	}
+
 	s, err := conn.NewSession()
 	if err != nil {
 		return nil, err
 	}
-	if err := s.RequestSubsystem("sftp"); err != nil {
+	if err := s.RequestSubsystem(subsystem); err != nil {
 		return nil, err
 	}
 	pw, err := s.StdinPipe()
